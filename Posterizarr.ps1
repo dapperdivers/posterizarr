@@ -15,7 +15,7 @@ param (
 )
 Set-PSReadLineOption -HistorySaveStyle SaveNothing
 
-$CurrentScriptVersion = "1.9.57"
+$CurrentScriptVersion = "1.9.63"
 $global:HeaderWritten = $false
 $ProgressPreference = 'SilentlyContinue'
 $env:PSMODULE_ANALYSIS_CACHE_PATH = $null
@@ -32,6 +32,40 @@ $env:PSMODULE_ANALYSIS_CACHE_ENABLED = $false
 #####################################################################################################################
 
 #### FUNCTION START ####
+function Test-PathPermissions {
+    param (
+        [string]$PathToTest
+    )
+
+    # Check if directory exists
+    $canRead = Test-Path $PathToTest -PathType Container -ErrorAction SilentlyContinue
+
+    # Check write access
+    $testFile = Join-Path $PathToTest ".perm_check"
+    try {
+        New-Item -ItemType File -Path $testFile -Force -ErrorAction Stop | Out-Null
+        Remove-Item $testFile -Force
+        $canWrite = $true
+    } catch {
+        $canWrite = $false
+    }
+
+    if ($canRead -and $canWrite) {
+        Write-Entry -Message "You have read and write permissions to $PathToTest" -Path "$global:ScriptRoot\Logs\Scriptlog.log" -Color Green -log Info
+    } else {
+        Write-Entry -Message "You do NOT have read and/or write permissions to $PathToTest" -Path "$global:ScriptRoot\Logs\Scriptlog.log" -Color Red -log Error
+        if ($PathToTest -eq $AssetPath) {
+            # Clear Running File
+            if (Test-Path $CurrentlyRunning) {
+                Remove-Item -LiteralPath $CurrentlyRunning | out-null
+            }
+            if ($global:UptimeKumaUrl) {
+                Send-UptimeKumaWebhook -status "down" -msg "Perm issues on /assets"
+            }
+            Exit  # Abort the script
+        }
+    }
+}
 function Reset-PlexLibraryPictures {
     param (
         [string]$LibraryName
@@ -3327,7 +3361,7 @@ function GetPlexArtwork {
     # Execute command and get exif data
     $value = (Invoke-Expression $magickcommand | Select-String -Pattern 'overlay|titlecard|created with ppm|created with posterizarr')
 
-    if ($value) {
+    if ($value -and $DisableHashValidation -eq 'false') {
         $ExifFound = $True
         if ($global:UploadExistingAssets -eq 'true') {
             Write-Entry -Subtext "Artwork has exif data from posterizarr/kometa/tcm, skip upload..." -Path $global:ScriptRoot\Logs\Scriptlog.log -Color Yellow -log Warning
@@ -3338,7 +3372,13 @@ function GetPlexArtwork {
         Remove-Item -LiteralPath $TempImage | out-null
     }
     Else {
-        Write-Entry -Subtext "No posterizarr/kometa/tcm exif data found, taking Plex artwork..." -Path $global:ScriptRoot\Logs\Scriptlog.log -Color Green -log Info
+        if ($DisableHashValidation -eq 'false'){
+            Write-Entry -Subtext "No posterizarr/kometa/tcm exif data found, taking Plex artwork..." -Path $global:ScriptRoot\Logs\Scriptlog.log -Color Green -log Info
+        }
+        Else {
+            Write-Entry -Subtext "taking Plex artwork..." -Path $global:ScriptRoot\Logs\Scriptlog.log -Color Green -log Info
+        }
+
         $global:PlexartworkDownloaded = $true
         $global:posterurl = $ArtUrl
     }
@@ -3392,9 +3432,6 @@ function CheckJson {
                 }
                 if ($global:UptimeKumaUrl) {
                     Send-UptimeKumaWebhook -status "down" -msg "Failed to read the existing configuration file."
-                }
-                if ($global:UptimeKumaUrl) {
-                    Send-UptimeKumaWebhook -status "down" -msg "Failed to read config"
                 }
                 Exit
             }
@@ -3538,10 +3575,14 @@ function CheckJsonPaths {
         [string]$Seasonoverlay,
         [string]$Backgroundoverlay,
         [string]$Posteroverlay4k,
-        [string]$Posteroverlay1080p
+        [string]$Posteroverlay1080p,
+        [string]$Backgroundoverlay4k,
+        [string]$Backgroundoverlay1080p,
+        [string]$TCoverlay4k,
+        [string]$TCoverlay1080p
     )
 
-    $paths = @($font, $RTLfont, $backgroundfont, $titlecardfont, $Posteroverlay, $Backgroundoverlay, $titlecardoverlay, $Seasonoverlay, $Posteroverlay4k, $Posteroverlay1080p)
+    $paths = @($font, $RTLfont, $backgroundfont, $titlecardfont, $Posteroverlay, $Backgroundoverlay, $titlecardoverlay, $Seasonoverlay, $Posteroverlay4k, $Posteroverlay1080p, $Backgroundoverlay4k, $Backgroundoverlay1080p, $TCoverlay4k, $TCoverlay1080p)
     $errorCount = 0
     foreach ($path in $paths) {
         if (-not (Test-Path -LiteralPath $path.TrimEnd())) {
@@ -3752,8 +3793,16 @@ function LogConfigSettings {
     Write-Entry -Subtext "| Used Background Overlay File:    $Backgroundoverlay" -Path $configLogging -Color White -log Info
     Write-Entry -Subtext "| Used TitleCard Overlay File:     $titlecardoverlay" -Path $configLogging -Color White -log Info
     if ($UsePosterResolutionOverlays -eq 'true') {
-        Write-Entry -Subtext "| Used 4K Overlay File:            $4kposter" -Path $configLogging -Color White -log Info
-        Write-Entry -Subtext "| Used 1080P Overlay File:         $1080pPoster" -Path $configLogging -Color White -log Info
+        Write-Entry -Subtext "| Used 4K Poster Overlay File:     $4kposter" -Path $configLogging -Color White -log Info
+        Write-Entry -Subtext "| Used 1080P Poster Overlay File:  $1080pPoster" -Path $configLogging -Color White -log Info
+    }
+    if ($UseBackgroundResolutionOverlays -eq 'true') {
+        Write-Entry -Subtext "| Used 4K BG Overlay File:         $4kBackground" -Path $configLogging -Color White -log Info
+        Write-Entry -Subtext "| Used 1080P BG Overlay File:      $1080pBackground" -Path $configLogging -Color White -log Info
+    }
+    if ($UseTCResolutionOverlays -eq 'true') {
+        Write-Entry -Subtext "| Used 4K TC Overlay File:         $4kTC" -Path $configLogging -Color White -log Info
+        Write-Entry -Subtext "| Used 1080P TC Overlay File:      $1080pTC" -Path $configLogging -Color White -log Info
     }
     Write-Entry -Subtext "| Create Library Folders:          $LibraryFolders" -Path $configLogging -Color White -log Info
     Write-Entry -Subtext "| Create Season Posters:           $global:SeasonPosters" -Path $configLogging -Color White -log Info
@@ -4020,6 +4069,10 @@ function CheckOverlayDimensions {
         [string]$Titlecardoverlay,
         [string]$Posteroverlay4k,
         [string]$Posteroverlay1080p,
+        [string]$Backgroundoverlay4k,
+        [string]$Backgroundoverlay1080p,
+        [string]$TCoverlay4k,
+        [string]$TCoverlay1080p,
         [string]$PosterSize,
         [string]$BackgroundSize
     )
@@ -4031,6 +4084,10 @@ function CheckOverlayDimensions {
     $Titlecardoverlaydimensions = & $magick $Titlecardoverlay -format "%wx%h" info:
     $4kPosteroverlaydimensions = & $magick $Posteroverlay4k -format "%wx%h" info:
     $1080pPosteroverlaydimensions = & $magick $Posteroverlay1080p -format "%wx%h" info:
+    $4kBackgroundoverlaydimensions = & $magick $Backgroundoverlay4k -format "%wx%h" info:
+    $1080pBackgroundoverlaydimensions = & $magick $Backgroundoverlay1080p -format "%wx%h" info:
+    $4kTCoverlaydimensions = & $magick $TCoverlay4k -format "%wx%h" info:
+    $1080pTCoverlaydimensions = & $magick $TCoverlay1080p -format "%wx%h" info:
 
     # Check Poster Overlay Size
     if ($Posteroverlaydimensions -eq $PosterSize) {
@@ -4078,6 +4135,37 @@ function CheckOverlayDimensions {
     else {
         Write-Entry -Subtext "1080p Poster overlay is NOT correctly sized at: $Postersize. Actual dimensions: $1080pPosteroverlaydimensions" -Path $global:ScriptRoot\Logs\Scriptlog.log -Color Yellow -log Warning
     }
+
+    # Check 4K Background Overlay Size
+    if ($4kBackgroundoverlaydimensions -eq $BackgroundSize) {
+        Write-Entry -Subtext "4K Background overlay is correctly sized at: $BackgroundSize" -Path $global:ScriptRoot\Logs\Scriptlog.log -Color Cyan -log Info
+    }
+    else {
+        Write-Entry -Subtext "4K Background overlay is NOT correctly sized at: $BackgroundSize. Actual dimensions: $4kBackgroundoverlaydimensions" -Path $global:ScriptRoot\Logs\Scriptlog.log -Color Yellow -log Warning
+    }
+
+    # Check 1080p Background Overlay Size
+    if ($1080pBackgroundoverlaydimensions -eq $BackgroundSize) {
+        Write-Entry -Subtext "1080p Background overlay is correctly sized at: $BackgroundSize" -Path $global:ScriptRoot\Logs\Scriptlog.log -Color Cyan -log Info
+    }
+    else {
+        Write-Entry -Subtext "1080p Background overlay is NOT correctly sized at: $BackgroundSize. Actual dimensions: $1080pBackgroundoverlaydimensions" -Path $global:ScriptRoot\Logs\Scriptlog.log -Color Yellow -log Warning
+    }
+
+    # Check 4K TitleCard Overlay Size
+    if ($4kTCoverlaydimensions -eq $BackgroundSize) {
+        Write-Entry -Subtext "4K TitleCard overlay is correctly sized at: $BackgroundSize" -Path $global:ScriptRoot\Logs\Scriptlog.log -Color Cyan -log Info
+    }
+    else {
+        Write-Entry -Subtext "4K TitleCard overlay is NOT correctly sized at: $BackgroundSize. Actual dimensions: $4kTCoverlaydimensions" -Path $global:ScriptRoot\Logs\Scriptlog.log -Color Yellow -log Warning
+    }
+    # Check 1080p TitleCard Overlay Size
+    if ($1080pTCoverlaydimensions -eq $BackgroundSize) {
+        Write-Entry -Subtext "1080p TitleCard overlay is correctly sized at: $BackgroundSize" -Path $global:ScriptRoot\Logs\Scriptlog.log -Color Cyan -log Info
+    }
+    else {
+        Write-Entry -Subtext "1080p TitleCard overlay is NOT correctly sized at: $BackgroundSize. Actual dimensions: $1080pTCoverlaydimensions" -Path $global:ScriptRoot\Logs\Scriptlog.log -Color Yellow -log Warning
+    }
 }
 function InvokeMagickCommand {
     param (
@@ -4099,19 +4187,6 @@ function InvokeMagickCommand {
             return $lines[0]
         }
     }
-        # Check if Pango rendering is needed for RTL languages on Docker
-        if ($global:direction -eq "RTL" -and $Platform -eq 'Docker') {
-            Write-Entry -Subtext "RTL language detected on Docker, attempting to use pango:" -Path $global:ScriptRoot\Logs\Scriptlog.log -Color Cyan -log Debug
-            # Replace the first instance of 'caption:' with 'pango:'
-            # Ensure we only replace the rendering method, not other occurrences of 'caption'
-            if ($Arguments -match '(?<!\w)caption:') {
-                $Arguments = [regex]::Replace($Arguments, '(?<!\w)caption:', 'pango:', 1)
-                Write-Entry -Subtext "Modified Arguments for pango: $Arguments" -Path $global:ScriptRoot\Logs\Scriptlog.log -Color Cyan -log Debug
-            } else {
-                Write-Entry -Subtext "Argument string did not contain 'caption:' for pango replacement." -Path $global:ScriptRoot\Logs\Scriptlog.log -Color Cyan -log Debug
-            }
-        }
-
 
     try {
         $processInfo = New-Object System.Diagnostics.ProcessStartInfo
@@ -4302,13 +4377,14 @@ function UploadOtherMediaServerArtwork {
         }
     }
 
-    if ($value) {
+    if ($value -and $DisableHashValidation -eq 'false') {
         $ExifFound = $True
         Write-Entry -Subtext "Artwork has exif data from posterizarr/kometa/tcm, skip upload..." -Path $global:ScriptRoot\Logs\Scriptlog.log -Color Yellow -log Warning
     }
     Else {
-        Write-Entry -Subtext "No posterizarr/kometa/tcm exif data found, starting upload..." -Path $global:ScriptRoot\Logs\Scriptlog.log -Color Green -log Info
-
+        if ($DisableHashValidation -eq 'false'){
+            Write-Entry -Subtext "No posterizarr/kometa/tcm exif data found, starting upload..." -Path $global:ScriptRoot\Logs\Scriptlog.log -Color Green -log Info
+        }
         # Read the image file as binary
         $imageData = [System.IO.File]::ReadAllBytes($imagePath)
 
@@ -4692,7 +4768,7 @@ function MassDownloadPlexArtwork {
                 }
                 if ($Seasondata) {
                     $SeasonsTemp = $Seasondata.MediaContainer.Directory | Where-Object { $_.Title -ne 'All episodes' }
-                    $SeasonNames = $SeasonsTemp.Title -join ','
+                    $SeasonNames = $SeasonsTemp.Title -join ';'
                     $SeasonNumbers = $SeasonsTemp.index -join ','
                     $SeasonRatingkeys = $SeasonsTemp.ratingKey -join ','
                     $SeasonPosterUrl = ($SeasonsTemp | Where-Object { $_.type -eq "season" }).thumb -join ','
@@ -4990,6 +5066,7 @@ function MassDownloadPlexArtwork {
                 }
 
                 if ($Platform -eq 'Docker' -or $Platform -eq 'Linux' -or $Platform -eq 'macOS') {
+                    $PosterImageoriginal = ($PosterImageoriginal).Replace('\', '/').Replace('./', '/')
                     $hashtestpath = ($TestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
                 }
                 else {
@@ -5110,6 +5187,7 @@ function MassDownloadPlexArtwork {
                     }
 
                     if ($Platform -eq 'Docker' -or $Platform -eq 'Linux' -or $Platform -eq 'macOS') {
+                        $backgroundImageoriginal = ($backgroundImageoriginal).Replace('\', '/').Replace('./', '/')
                         $hashtestpath = ($TestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
                     }
                     else {
@@ -5289,6 +5367,7 @@ function MassDownloadPlexArtwork {
             }
 
             if ($Platform -eq 'Docker' -or $Platform -eq 'Linux' -or $Platform -eq 'macOS') {
+                $PosterImageoriginal = ($PosterImageoriginal).Replace('\', '/').Replace('./', '/')
                 $hashtestpath = ($TestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
             }
             else {
@@ -5399,6 +5478,7 @@ function MassDownloadPlexArtwork {
                 }
 
                 if ($Platform -eq 'Docker' -or $Platform -eq 'Linux' -or $Platform -eq 'macOS') {
+                    $backgroundImageoriginal = ($backgroundImageoriginal).Replace('\', '/').Replace('./', '/')
                     $hashtestpath = ($TestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
                 }
                 else {
@@ -5516,7 +5596,7 @@ function MassDownloadPlexArtwork {
                 $global:PosterWithText = $null
                 $global:ImageMagickError = $null
                 $global:TextlessPoster = $null
-                $global:seasonNames = $entry.SeasonNames -split ','
+                $global:seasonNames = $entry.SeasonNames -split ';'
                 $global:SeasonRatingKeys = $entry.SeasonRatingKeys -split ','
                 $global:seasonNumbers = $entry.seasonNumbers -split ','
                 $global:PlexSeasonUrls = $entry.PlexSeasonUrls -split ','
@@ -5562,6 +5642,7 @@ function MassDownloadPlexArtwork {
                     }
 
                     if ($Platform -eq 'Docker' -or $Platform -eq 'Linux' -or $Platform -eq 'macOS') {
+                        $SeasonImageoriginal = ($SeasonImageoriginal).Replace('\', '/').Replace('./', '/')
                         $hashtestpath = ($TestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
                     }
                     else {
@@ -5717,6 +5798,7 @@ function MassDownloadPlexArtwork {
                             }
 
                             if ($Platform -eq 'Docker' -or $Platform -eq 'Linux' -or $Platform -eq 'macOS') {
+                                $EpisodeImageoriginal = ($EpisodeImageoriginal).Replace('\', '/').Replace('./', '/')
                                 $hashtestpath = ($TestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
                             }
                             else {
@@ -6332,7 +6414,12 @@ function SyncPlexArtwork {
         Else {
             Write-Entry -Subtext "Image hashes match, skipping upload for $title" -Path $global:ScriptRoot\Logs\Scriptlog.log -Color White -log Debug
         }
-        return
+        if ($DisableHashValidation -eq 'true') {
+            Write-Entry -Subtext "Hash validation is disabled, proceeding with upload..." -Path $global:ScriptRoot\Logs\Scriptlog.log -Color Yellow -log Warning
+        }
+        else {
+            return
+        }
     }
 
     Write-Entry -Subtext "Uploading new artwork to Jelly/Emby for: $title" -Path $global:ScriptRoot\Logs\Scriptlog.log -Color White -log Info
@@ -6761,6 +6848,7 @@ $BackupPath = RemoveTrailingSlash $config.PrerequisitePart.BackupPath
 $ManualAssetPath = RemoveTrailingSlash $config.PrerequisitePart.ManualAssetPath
 $Upload2Plex = $config.PrerequisitePart.PlexUpload.tolower()
 $SkipAddText = $config.PrerequisitePart.SkipAddText.tolower()
+$DisableHashValidation = $config.PrerequisitePart.DisableHashValidation.tolower()
 
 # Check if its a Network Share
 if ($AssetPath.StartsWith("\")) {
@@ -6816,9 +6904,16 @@ $NewLineSymbols = $config.PrerequisitePart.NewLineSymbols
 
 # Resolution Part
 $UsePosterResolutionOverlays = $config.PrerequisitePart.UsePosterResolutionOverlays.tolower()
+$UseBackgroundResolutionOverlays = $config.PrerequisitePart.UseBackgroundResolutionOverlays.tolower()
+$UseTCResolutionOverlays = $config.PrerequisitePart.UseTCResolutionOverlays.tolower()
 
 $4kposter = Join-Path -Path $global:ScriptRoot -ChildPath ('temp', $config.PrerequisitePart.poster4k -join $($joinsymbol))
 $1080pPoster = Join-Path -Path $global:ScriptRoot -ChildPath ('temp', $config.PrerequisitePart.Poster1080p -join $($joinsymbol))
+$4kBackground = Join-Path -Path $global:ScriptRoot -ChildPath ('temp', $config.PrerequisitePart.Background4k -join $($joinsymbol))
+$1080pBackground = Join-Path -Path $global:ScriptRoot -ChildPath ('temp', $config.PrerequisitePart.Background1080p -join $($joinsymbol))
+$4kTC = Join-Path -Path $global:ScriptRoot -ChildPath ('temp', $config.PrerequisitePart.TC4k -join $($joinsymbol))
+$1080pTC = Join-Path -Path $global:ScriptRoot -ChildPath ('temp', $config.PrerequisitePart.TC1080p -join $($joinsymbol))
+
 # Poster Overlay Part
 $global:ImageProcessing = $config.OverlayPart.ImageProcessing.tolower()
 $global:outputQuality = $config.OverlayPart.outputQuality
@@ -7026,6 +7121,7 @@ if ($Testing) {
     $configLogging = Join-Path $LogsPath 'Testinglog.log'
 }
 
+# Check for latest Imagemagick Version
 if ($global:OSarch -eq "Arm64") {
     try {
         $CurrentImagemagickversion = & $magick -version
@@ -7054,20 +7150,8 @@ Else {
     $CurrentImagemagickversion = $CurrentImagemagickversion.Groups[1].Value.replace('-', '.')
     Write-Entry -Message "Current Imagemagick Version: $CurrentImagemagickversion" -Path $configLogging -Color White -log Info
 }
-if ($global:OSType -eq "Docker") {
-    if ($env:POSTERIZARR_NON_ROOT -eq 'TRUE'){
-        $OSVersionTag = (Get-Content /etc/os-release | Select-String -Pattern "^PRETTY_NAME=").ToString().Split('=')[1].Trim('"').replace('Alpine Linux ','')
-        $Url = "https://pkgs.alpinelinux.org/package/$OSVersionTag/community/x86_64/imagemagick"
-        $response = Invoke-WebRequest -Uri $url
-        $htmlContent = $response.Content
-        $regexPattern = '<th class="header">Version<\/th>\s*<td>\s*<strong>([\d\.]+-r\d+)<\/strong>\s*<\/td>'
-        $Versionmatching = [regex]::Matches($htmlContent, $regexPattern)
 
-        if ($Versionmatching.Count -gt 0) {
-            $LatestImagemagickversion = $Versionmatching[0].Groups[1].Value.split('-')[0]
-        }
-    }
-    Else{
+if ($global:OSType -eq "Docker") {
         $Url = "https://raw.githubusercontent.com/SoftCreatR/imei/main/versions/imagemagick.version"
         $response = Invoke-WebRequest -Uri $url
         $htmlContent = $response.Content
@@ -7077,7 +7161,6 @@ if ($global:OSType -eq "Docker") {
         if ($Versionmatching.Count -gt 0) {
             $LatestImagemagickversion = $Versionmatching[0].Value
         }
-    }
 }
 Elseif ($global:OSType -eq "Win32NT") {
     $Url = "https://imagemagick.org/archive/binaries/?C=M;O=D"
@@ -7145,6 +7228,11 @@ if (!(Test-Path $AssetPath)) {
     }
     New-Item -ItemType Directory -Path $AssetPath -Force | Out-Null
 }
+
+# Check directory perms
+Test-PathPermissions -PathToTest $AssetPath
+Test-PathPermissions -PathToTest $BackupPath
+Test-PathPermissions -PathToTest $ManualAssetPath
 
 if ($ForceRunningDeletion -eq 'true') {
     if (Test-Path $CurrentlyRunning) {
@@ -7283,7 +7371,7 @@ if ($files.Extension -match "\.(ttf|otf)$" -and $env:POSTERIZARR_NON_ROOT -eq 'T
     & fc-cache -fv 1> $null 2> $null
 }
 
-CheckJsonPaths -font "$font" -RTLfont "$RTLfont" -backgroundfont "$backgroundfont "-titlecardfont "$titlecardfont" -Posteroverlay "$Posteroverlay" -Backgroundoverlay "$Backgroundoverlay" -titlecardoverlay "$titlecardoverlay" -Seasonoverlay "$Seasonoverlay" -Posteroverlay4k "$4kposter" -Posteroverlay1080p "$1080pPoster"
+CheckJsonPaths -font "$font" -RTLfont "$RTLfont" -backgroundfont "$backgroundfont "-titlecardfont "$titlecardfont" -Posteroverlay "$Posteroverlay" -Backgroundoverlay "$Backgroundoverlay" -titlecardoverlay "$titlecardoverlay" -Seasonoverlay "$Seasonoverlay" -Posteroverlay4k "$4kposter" -Posteroverlay1080p "$1080pPoster" -Backgroundoverlay4k "$4kBackground" -Backgroundoverlay1080p "$1080pBackground" -TCoverlay4k "$4kTC" -TCoverlay1080p "$1080pTC"
 # Check Plex now:
 if (!$SyncJelly -and !$SyncEmby) {
     if ($UsePlex -eq 'true') {
@@ -7301,7 +7389,7 @@ if (!$SyncJelly -and !$SyncEmby) {
 }
 # Check overlay artwork for poster, background, and titlecard dimensions
 Write-Entry -Message "Checking size of overlay files..." -Path $configLogging -Color White -log Info
-CheckOverlayDimensions -Posteroverlay "$Posteroverlay" -Backgroundoverlay "$Backgroundoverlay" -Titlecardoverlay "$titlecardoverlay" -PosterSize "$PosterSize" -BackgroundSize "$BackgroundSize" -Seasonoverlay "$Seasonoverlay" -Posteroverlay4k "$4kposter" -Posteroverlay1080p "$1080pPoster"
+CheckOverlayDimensions -Posteroverlay "$Posteroverlay" -Backgroundoverlay "$Backgroundoverlay" -Titlecardoverlay "$titlecardoverlay" -PosterSize "$PosterSize" -BackgroundSize "$BackgroundSize" -Seasonoverlay "$Seasonoverlay" -Posteroverlay4k "$4kposter" -Posteroverlay1080p "$1080pPoster" -Backgroundoverlay4k "$4kBackground" -Backgroundoverlay1080p "$1080pBackground" -TCoverlay4k "$4kTC" -TCoverlay1080p "$1080pTC"
 
 # Check if the FanartTvAPI module is installed
 $module = Get-Module -ListAvailable -Name FanartTvAPI
@@ -7444,9 +7532,19 @@ if ($Manual) {
             if ($SeasonPosterName -match 'Season\s+(\d+)') {
                 $global:SeasonNumber = $Matches[1]
                 $global:season = "Season" + $global:SeasonNumber.PadLeft(2, '0')
-            }
-            if ($SeasonPosterName -eq 'Specials') {
+            }Elseif ($SeasonPosterName -eq 'Specials') {
                 $global:season = "Season00"
+            }
+            Else {
+                Write-Entry -Subtext "Could not match Season name..." -Path $global:ScriptRoot\Logs\Manuallog.log -Color Yellow -log Warning
+                $seasontemp = Read-Host "Please enter Season Name for the local file (eq. Season00 or Season01....)"
+                if ($seasontemp -match '^Season(\d{2})$') {
+                    $global:SeasonNumber = $Matches[1]
+                    $global:season = "Season" + $global:SeasonNumber.PadLeft(2, '0')
+                } else {
+                    Write-Entry -Subtext "Invalid season format. Please enter something like Season00 or Season01." -Path $global:ScriptRoot\Logs\Manuallog.log -Color Yellow -log Warning
+                    Exit
+                }
             }
             $PosterImageoriginal = "$AssetPath\$LibraryName\$FolderName\$global:season.jpg"
         }
@@ -7475,8 +7573,19 @@ if ($Manual) {
                 $global:SeasonNumber = $Matches[1]
                 $global:season = "Season" + $global:SeasonNumber.PadLeft(2, '0')
             }
-            if ($SeasonPosterName -eq 'Specials') {
+            Elseif ($SeasonPosterName -eq 'Specials') {
                 $global:season = "Season00"
+            }
+            Else {
+                Write-Entry -Subtext "Could not match Season name..." -Path $global:ScriptRoot\Logs\Manuallog.log -Color Yellow -log Warning
+                $seasontemp = Read-Host "Please enter Season Name for the local file (eq. Season00 or Season01....)"
+                if ($seasontemp -match '^Season(\d{2})$') {
+                    $global:SeasonNumber = $Matches[1]
+                    $global:season = "Season" + $global:SeasonNumber.PadLeft(2, '0')
+                } else {
+                    Write-Entry -Subtext "Invalid season format. Please enter something like Season00 or Season01." -Path $global:ScriptRoot\Logs\Manuallog.log -Color Yellow -log Warning
+                    Exit
+                }
             }
             $PosterImageoriginal = "$AssetPath\$($FolderName)_$global:season.jpg"
         }
@@ -9034,7 +9143,7 @@ Elseif ($Tautulli) {
         }
         if ($Seasondata) {
             $SeasonsTemp = $Seasondata.MediaContainer.Directory | Where-Object { $_.Title -ne 'All episodes' }
-            $SeasonNames = $SeasonsTemp.Title -join ','
+            $SeasonNames = $SeasonsTemp.Title -join ';'
             $SeasonNumbers = $SeasonsTemp.index -join ','
             $SeasonRatingkeys = $SeasonsTemp.ratingKey -join ','
             $SeasonPosterUrl = ($SeasonsTemp | Where-Object { $_.type -eq "season" }).thumb -join ','
@@ -9337,6 +9446,7 @@ Elseif ($Tautulli) {
                     }
                     if ($Platform -eq 'Docker' -or $Platform -eq 'Linux' -or $Platform -eq 'macOS') {
                         $hashtestpath = ($TestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
+                        $PosterImageoriginal = ($PosterImageoriginal).Replace('\', '/').Replace('./', '/')
                         $manualtestpath = ($ManualTestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
                     }
                     else {
@@ -9766,6 +9876,7 @@ Elseif ($Tautulli) {
 
                         if ($Platform -eq 'Docker' -or $Platform -eq 'Linux' -or $Platform -eq 'macOS') {
                             $hashtestpath = ($TestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
+                            $backgroundImageoriginal = ($backgroundImageoriginal).Replace('\', '/').Replace('./', '/')
                             $manualtestpath = ($ManualTestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
                         }
                         else {
@@ -9964,6 +10075,13 @@ Elseif ($Tautulli) {
                                     $CommentlogEntry | Out-File $global:ScriptRoot\Logs\ImageMagickCommands.log -Append
                                     InvokeMagickCommand -Command $magick -Arguments $CommentArguments
                                     if (!$global:ImageMagickError -eq 'true') {
+                                        if ($UseBackgroundResolutionOverlays -eq 'true'){
+                                            switch ($entry.Resolution) {
+                                                '4K' { $backgroundoverlay = $4kBackground }
+                                                '1080p' { $backgroundoverlay = $1080pBackground }
+                                                Default { $backgroundoverlay = $backgroundoverlay }
+                                            }
+                                        }
                                         # Calculate the height to maintain the aspect ratio with a width of 1000 pixels
                                         if ($AddBackgroundBorder -eq 'true' -and $AddBackgroundOverlay -eq 'true') {
                                             $Arguments = "`"$backgroundImage`" -resize `"$BackgroundSize^`" -gravity center -extent `"$BackgroundSize`" `"$backgroundoverlay`" -gravity south -quality $global:outputQuality -composite -shave `"$Backgroundborderwidthsecond`"  -bordercolor `"$Backgroundbordercolor`" -border `"$Backgroundborderwidth`" `"$backgroundImage`""
@@ -10249,6 +10367,7 @@ Elseif ($Tautulli) {
 
                 if ($Platform -eq 'Docker' -or $Platform -eq 'Linux' -or $Platform -eq 'macOS') {
                     $hashtestpath = ($TestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
+                    $PosterImageoriginal = ($PosterImageoriginal).Replace('\', '/').Replace('./', '/')
                     $manualtestpath = ($ManualTestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
                 }
                 else {
@@ -10644,6 +10763,7 @@ Elseif ($Tautulli) {
 
                     if ($Platform -eq 'Docker' -or $Platform -eq 'Linux' -or $Platform -eq 'macOS') {
                         $hashtestpath = ($TestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
+                        $backgroundImageoriginal = ($backgroundImageoriginal).Replace('\', '/').Replace('./', '/')
                         $manualtestpath = ($ManualTestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
                     }
                     else {
@@ -10854,6 +10974,13 @@ Elseif ($Tautulli) {
                                 $CommentlogEntry | Out-File $global:ScriptRoot\Logs\ImageMagickCommands.log -Append
                                 InvokeMagickCommand -Command $magick -Arguments $CommentArguments
                                 if (!$global:ImageMagickError -eq 'true') {
+                                    if ($UseBackgroundResolutionOverlays -eq 'true'){
+                                        switch ($entry.Resolution) {
+                                            '4K' { $Backgroundoverlay = $4kBackground }
+                                            '1080p' { $Backgroundoverlay = $1080pBackground }
+                                            Default { $Backgroundoverlay = $Backgroundoverlay }
+                                        }
+                                    }
                                     # Calculate the height to maintain the aspect ratio with a width of 1000 pixels
                                     if ($AddBackgroundBorder -eq 'true' -and $AddBackgroundOverlay -eq 'true') {
                                         $Arguments = "`"$backgroundImage`" -resize `"$BackgroundSize^`" -gravity center -extent `"$BackgroundSize`" `"$Backgroundoverlay`" -gravity south -quality $global:outputQuality -composite -shave `"$Backgroundborderwidthsecond`"  -bordercolor `"$Backgroundbordercolor`" -border `"$Backgroundborderwidth`" `"$backgroundImage`""
@@ -10917,6 +11044,11 @@ Elseif ($Tautulli) {
                                 $logEntry = "`"$magick`" $Resizeargument"
                                 $logEntry | Out-File $global:ScriptRoot\Logs\ImageMagickCommands.log -Append
                                 InvokeMagickCommand -Command $magick -Arguments $Resizeargument
+
+                                $CommentArguments = "`"$backgroundImage`" -set `"comment`" `"created with posterizarr`" `"$backgroundImage`""
+                                $CommentlogEntry = "`"$magick`" $CommentArguments"
+                                $CommentlogEntry | Out-File $global:ScriptRoot\Logs\ImageMagickCommands.log -Append
+                                InvokeMagickCommand -Command $magick -Arguments $CommentArguments
                             }
                             if (!$global:ImageMagickError -eq 'true') {
                                 # Move file back to original naming with Brackets.
@@ -11029,7 +11161,7 @@ Elseif ($Tautulli) {
                     $global:PosterWithText = $null
                     $global:ImageMagickError = $null
                     $global:TextlessPoster = $null
-                    $global:seasonNames = $entry.SeasonNames -split ','
+                    $global:seasonNames = $entry.SeasonNames -split ';'
                     $global:SeasonRatingKeys = $entry.SeasonRatingKeys -split ','
                     $global:seasonNumbers = $entry.seasonNumbers -split ','
                     $global:PlexSeasonUrls = $entry.PlexSeasonUrls -split ','
@@ -11086,6 +11218,7 @@ Elseif ($Tautulli) {
 
                         if ($Platform -eq 'Docker' -or $Platform -eq 'Linux' -or $Platform -eq 'macOS') {
                             $hashtestpath = ($TestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
+                            $SeasonImageoriginal = ($SeasonImageoriginal).Replace('\', '/').Replace('./', '/')
                             $manualtestpath = ($ManualTestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
                         }
                         else {
@@ -11667,9 +11800,11 @@ Elseif ($Tautulli) {
                         $global:IsFallback = $null
                         $global:FallbackText = $null
                         $global:TextlessPoster = $null
+                        $global:EPResolutions = $null
 
                         if (($episode.tmdbid -eq $entry.tmdbid -or $episode.tvdbid -eq $entry.tvdbid) -and $episode.'Show Name' -eq $entry.title -and $episode.'Library Name' -eq $entry.'Library Name') {
                             $global:show_name = $episode."Show Name"
+                            $global:EPResolutions = $episode."Resolutions".Split(",")
                             $global:season_number = $episode."Season Number"
                             $global:episode_numbers = $episode."Episodes".Split(",")
                             $global:episode_ratingkeys = $episode."ratingKeys".Split(",")
@@ -11700,6 +11835,7 @@ Elseif ($Tautulli) {
                                     $global:PlexTitleCardUrl = $entry.PlexBackgroundUrl
                                     $global:episode_ratingkey = $($global:episode_ratingkeys[$i].Trim())
                                     $global:EPTitle = $($global:titles[$i].Trim())
+                                    $global:EPResolution = $($global:EPResolutions[$i].Trim())
                                     $global:episodenumber = $($global:episode_numbers[$i].Trim())
                                     $global:FileNaming = "S" + $global:season_number.PadLeft(2, '0') + "E" + $global:episodenumber.PadLeft(2, '0')
                                     $bullet = [char]0x2022
@@ -11713,7 +11849,7 @@ Elseif ($Tautulli) {
                                     }
                                     Else {
                                         if ($entry.extraFolder) {
-                                            $SeasonImageoriginal = "$AssetPath\$($entry.extraFolder)\$($entry.RootFoldername)_$global:FileNaming.jpg"
+                                            $EpisodeImageoriginal = "$AssetPath\$($entry.extraFolder)\$($entry.RootFoldername)_$global:FileNaming.jpg"
                                         }
                                         Else {
                                             $EpisodeImageoriginal = "$AssetPath\$($entry.RootFoldername)_$global:FileNaming.jpg"
@@ -11725,6 +11861,7 @@ Elseif ($Tautulli) {
 
                                     if ($Platform -eq 'Docker' -or $Platform -eq 'Linux' -or $Platform -eq 'macOS') {
                                         $hashtestpath = ($TestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
+                                        $EpisodeImageoriginal = ($EpisodeImageoriginal).Replace('\', '/').Replace('./', '/')
                                         $manualtestpath = ($ManualTestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
                                     }
                                     else {
@@ -11945,6 +12082,13 @@ Elseif ($Tautulli) {
                                                             $CommentlogEntry | Out-File $global:ScriptRoot\Logs\ImageMagickCommands.log -Append
                                                             InvokeMagickCommand -Command $magick -Arguments $CommentArguments
                                                             if (!$global:ImageMagickError -eq 'true') {
+                                                                if ($UseTCResolutionOverlays -eq 'true'){
+                                                                    switch ($global:EPResolution) {
+                                                                        '4K' { $TitleCardoverlay = $4kTC }
+                                                                        '1080p' { $TitleCardoverlay = $1080pTC }
+                                                                        Default { $TitleCardoverlay = $TitleCardoverlay }
+                                                                    }
+                                                                }
                                                                 # Resize Image to 2000x3000 and apply Border and overlay
                                                                 if ($AddTitleCardBorder -eq 'true' -and $AddTitleCardOverlay -eq 'true') {
                                                                     $Arguments = "`"$EpisodeImage`" -resize `"$BackgroundSize^`" -gravity center -extent `"$BackgroundSize`" `"$TitleCardoverlay`" -gravity south -quality $global:outputQuality -composite -shave `"$TitleCardborderwidthsecond`"  -bordercolor `"$TitleCardbordercolor`" -border `"$TitleCardborderwidth`" `"$EpisodeImage`""
@@ -12225,7 +12369,7 @@ Elseif ($Tautulli) {
                                     }
                                     Else {
                                         if ($entry.extraFolder) {
-                                            $SeasonImageoriginal = "$AssetPath\$($entry.extraFolder)\$($entry.RootFoldername)_$global:FileNaming.jpg"
+                                            $EpisodeImageoriginal = "$AssetPath\$($entry.extraFolder)\$($entry.RootFoldername)_$global:FileNaming.jpg"
                                         }
                                         Else {
                                             $EpisodeImageoriginal = "$AssetPath\$($entry.RootFoldername)_$global:FileNaming.jpg"
@@ -12237,6 +12381,7 @@ Elseif ($Tautulli) {
 
                                     if ($Platform -eq 'Docker' -or $Platform -eq 'Linux' -or $Platform -eq 'macOS') {
                                         $hashtestpath = ($TestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
+                                        $EpisodeImageoriginal = ($EpisodeImageoriginal).Replace('\', '/').Replace('./', '/')
                                         $manualtestpath = ($ManualTestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
                                     }
                                     else {
@@ -12469,6 +12614,13 @@ Elseif ($Tautulli) {
                                                         $CommentlogEntry | Out-File $global:ScriptRoot\Logs\ImageMagickCommands.log -Append
                                                         InvokeMagickCommand -Command $magick -Arguments $CommentArguments
                                                         if (!$global:ImageMagickError -eq 'true') {
+                                                            if ($UseTCResolutionOverlays -eq 'true'){
+                                                                switch ($global:EPResolution) {
+                                                                    '4K' { $TitleCardoverlay = $4kTC }
+                                                                    '1080p' { $TitleCardoverlay = $1080pTC }
+                                                                    Default { $TitleCardoverlay = $TitleCardoverlay }
+                                                                }
+                                                            }
                                                             # Resize Image to 2000x3000 and apply Border and overlay
                                                             if ($AddTitleCardBorder -eq 'true' -and $AddTitleCardOverlay -eq 'true') {
                                                                 $Arguments = "`"$EpisodeImage`" -resize `"$BackgroundSize^`" -gravity center -extent `"$BackgroundSize`" `"$TitleCardoverlay`" -gravity south -quality $global:outputQuality -composite -shave `"$TitleCardborderwidthsecond`"  -bordercolor `"$TitleCardbordercolor`" -border `"$TitleCardborderwidth`" `"$EpisodeImage`""
@@ -13069,7 +13221,7 @@ Elseif ($SyncJelly -or $SyncEmby) {
                 }
                 if ($Seasondata) {
                     $SeasonsTemp = $Seasondata.MediaContainer.Directory | Where-Object { $_.Title -ne 'All episodes' }
-                    $SeasonNames = $SeasonsTemp.Title -join ','
+                    $SeasonNames = $SeasonsTemp.Title -join ';'
                     $SeasonNumbers = $SeasonsTemp.index -join ','
                     $SeasonRatingkeys = $SeasonsTemp.ratingKey -join ','
                     $SeasonPosterUrl = ($SeasonsTemp | Where-Object { $_.type -eq "season" }).thumb -join ','
@@ -14399,6 +14551,7 @@ Elseif ($OtherMediaServerUrl -and $OtherMediaServerApiKey -and $UseOtherMediaSer
 
     # Export the formatted data to CSV
     $FormattedData | Select-Object * | Export-Csv -Path "$global:ScriptRoot\Logs\OtherMediaServerEpisodeExport.csv" -NoTypeInformation -Delimiter ';' -Encoding UTF8 -Force
+    $Episodedata = $FormattedData
     if ($AllEpisodes) {
         Write-Entry -Subtext "Found '$($AllEpisodes.Items.count)' Episodes..." -Path $global:ScriptRoot\Logs\Scriptlog.log -Color Cyan -log Info
     }
@@ -14543,6 +14696,7 @@ Elseif ($OtherMediaServerUrl -and $OtherMediaServerApiKey -and $UseOtherMediaSer
 
                     if ($Platform -eq 'Docker' -or $Platform -eq 'Linux') {
                         $hashtestpath = ($TestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
+                        $PosterImageoriginal = ($PosterImageoriginal).Replace('\', '/').Replace('./', '/')
                         $manualtestpath = ($ManualTestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
                     }
                     else {
@@ -14940,6 +15094,7 @@ Elseif ($OtherMediaServerUrl -and $OtherMediaServerApiKey -and $UseOtherMediaSer
 
                         if ($Platform -eq 'Docker' -or $Platform -eq 'Linux') {
                             $hashtestpath = ($TestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
+                            $backgroundImageoriginal = ($backgroundImageoriginal).Replace('\', '/').Replace('./', '/')
                             $manualtestpath = ($ManualTestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
                         }
                         else {
@@ -15119,6 +15274,13 @@ Elseif ($OtherMediaServerUrl -and $OtherMediaServerApiKey -and $UseOtherMediaSer
                                     $CommentlogEntry | Out-File $global:ScriptRoot\Logs\ImageMagickCommands.log -Append
                                     InvokeMagickCommand -Command $magick -Arguments $CommentArguments
                                     if (!$global:ImageMagickError -eq 'True') {
+                                        if ($UseBackgroundResolutionOverlays -eq 'true'){
+                                            switch ($entry.Resolution) {
+                                                '4K' { $backgroundoverlay = $4kBackground }
+                                                '1080p' { $backgroundoverlay = $1080pBackground }
+                                                Default { $backgroundoverlay = $backgroundoverlay }
+                                            }
+                                        }
                                         # Calculate the height to maintain the aspect ratio with a width of 1000 pixels
                                         if ($AddBackgroundBorder -eq 'true' -and $AddBackgroundOverlay -eq 'true') {
                                             $Arguments = "`"$backgroundImage`" -resize `"$BackgroundSize^`" -gravity center -extent `"$BackgroundSize`" `"$backgroundoverlay`" -gravity south -quality $global:outputQuality -composite -shave `"$Backgroundborderwidthsecond`"  -bordercolor `"$Backgroundbordercolor`" -border `"$Backgroundborderwidth`" `"$backgroundImage`""
@@ -15391,6 +15553,7 @@ Elseif ($OtherMediaServerUrl -and $OtherMediaServerApiKey -and $UseOtherMediaSer
 
                 if ($Platform -eq 'Docker' -or $Platform -eq 'Linux') {
                     $hashtestpath = ($TestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
+                    $PosterImageoriginal = ($PosterImageoriginal).Replace('\', '/').Replace('./', '/')
                     $manualtestpath = ($ManualTestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
                 }
                 else {
@@ -15752,6 +15915,7 @@ Elseif ($OtherMediaServerUrl -and $OtherMediaServerApiKey -and $UseOtherMediaSer
 
                     if ($Platform -eq 'Docker' -or $Platform -eq 'Linux') {
                         $hashtestpath = ($TestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
+                        $backgroundImageoriginal = ($backgroundImageoriginal).Replace('\', '/').Replace('./', '/')
                         $manualtestpath = ($ManualTestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
                     }
                     else {
@@ -15943,6 +16107,13 @@ Elseif ($OtherMediaServerUrl -and $OtherMediaServerApiKey -and $UseOtherMediaSer
                                 $CommentlogEntry | Out-File $global:ScriptRoot\Logs\ImageMagickCommands.log -Append
                                 InvokeMagickCommand -Command $magick -Arguments $CommentArguments
                                 if (!$global:ImageMagickError -eq 'True') {
+                                    if ($UseBackgroundResolutionOverlays -eq 'true'){
+                                        switch ($entry.Resolution) {
+                                            '4K' { $backgroundoverlay = $4kBackground }
+                                            '1080p' { $backgroundoverlay = $1080pBackground }
+                                            Default { $backgroundoverlay = $backgroundoverlay }
+                                        }
+                                    }
                                     # Calculate the height to maintain the aspect ratio with a width of 1000 pixels
                                     if ($AddBackgroundBorder -eq 'true' -and $AddBackgroundOverlay -eq 'true') {
                                         $Arguments = "`"$backgroundImage`" -resize `"$BackgroundSize^`" -gravity center -extent `"$BackgroundSize`" `"$Backgroundoverlay`" -gravity south -quality $global:outputQuality -composite -shave `"$Backgroundborderwidthsecond`"  -bordercolor `"$Backgroundbordercolor`" -border `"$Backgroundborderwidth`" `"$backgroundImage`""
@@ -16171,6 +16342,7 @@ Elseif ($OtherMediaServerUrl -and $OtherMediaServerApiKey -and $UseOtherMediaSer
 
                             if ($Platform -eq 'Docker' -or $Platform -eq 'Linux') {
                                 $hashtestpath = ($TestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
+                                $SeasonImageoriginal = ($SeasonImageoriginal).Replace('\', '/').Replace('./', '/')
                                 $manualtestpath = ($ManualTestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
                             }
                             else {
@@ -16665,10 +16837,12 @@ Elseif ($OtherMediaServerUrl -and $OtherMediaServerApiKey -and $UseOtherMediaSer
                         $global:IsFallback = $null
                         $global:FallbackText = $null
                         $global:TextlessPoster = $null
+                        $global:EPResolutions = $null
 
                         if (($episode.tmdbid -eq $entry.tmdbid -or $episode.tvdbid -eq $entry.tvdbid) -and $episode.'Show Name' -eq $entry.title) {
                             $global:show_name = $episode."Show Name"
                             $global:season_number = $episode."Season Number"
+                            $global:EPResolutions = $episode."Resolutions".Split(",")
                             $global:episode_numbers = $episode."Episodes".Split(",")
                             $global:episodeids = $episode."EpisodeIDs".Split(",")
                             $global:titles = $episode."Title".Split(";")
@@ -16694,6 +16868,7 @@ Elseif ($OtherMediaServerUrl -and $OtherMediaServerApiKey -and $UseOtherMediaSer
                                     $Arturl = $null
                                     $TakeLocal = $null
                                     $global:EPTitle = $($global:titles[$i].Trim())
+                                    $global:EPResolution = $($global:EPResolutions[$i].Trim())
                                     $global:episodenumber = $($global:episode_numbers[$i].Trim())
                                     $global:episodeid = $($global:episodeids[$i].Trim())
                                     $global:FileNaming = "S" + $global:season_number.ToString().PadLeft(2, '0') + "E" + $global:episodenumber.ToString().PadLeft(2, '0')
@@ -16708,7 +16883,7 @@ Elseif ($OtherMediaServerUrl -and $OtherMediaServerApiKey -and $UseOtherMediaSer
                                     }
                                     Else {
                                         if ($entry.extraFolder) {
-                                            $SeasonImageoriginal = "$AssetPath\$($entry.extraFolder)\$($entry.RootFoldername)_$global:FileNaming.jpg"
+                                            $EpisodeImageoriginal = "$AssetPath\$($entry.extraFolder)\$($entry.RootFoldername)_$global:FileNaming.jpg"
                                         }
                                         Else {
                                             $EpisodeImageoriginal = "$AssetPath\$($entry.RootFoldername)_$global:FileNaming.jpg"
@@ -16720,6 +16895,7 @@ Elseif ($OtherMediaServerUrl -and $OtherMediaServerApiKey -and $UseOtherMediaSer
 
                                     if ($Platform -eq 'Docker' -or $Platform -eq 'Linux') {
                                         $hashtestpath = ($TestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
+                                        $EpisodeImageoriginal = ($EpisodeImageoriginal).Replace('\', '/').Replace('./', '/')
                                         $manualtestpath = ($ManualTestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
                                     }
                                     else {
@@ -16904,6 +17080,13 @@ Elseif ($OtherMediaServerUrl -and $OtherMediaServerApiKey -and $UseOtherMediaSer
                                                             $CommentlogEntry | Out-File $global:ScriptRoot\Logs\ImageMagickCommands.log -Append
                                                             InvokeMagickCommand -Command $magick -Arguments $CommentArguments
                                                             if (!$global:ImageMagickError -eq 'True') {
+                                                                if ($UseTCResolutionOverlays -eq 'true'){
+                                                                    switch ($global:EPResolution) {
+                                                                        '4K' { $TitleCardoverlay = $4kTC }
+                                                                        '1080p' { $TitleCardoverlay = $1080pTC }
+                                                                        Default { $TitleCardoverlay = $TitleCardoverlay }
+                                                                    }
+                                                                }
                                                                 # Resize Image to 2000x3000 and apply Border and overlay
                                                                 if ($AddTitleCardBorder -eq 'true' -and $AddTitleCardOverlay -eq 'true') {
                                                                     $Arguments = "`"$EpisodeImage`" -resize `"$BackgroundSize^`" -gravity center -extent `"$BackgroundSize`" `"$TitleCardoverlay`" -gravity south -quality $global:outputQuality -composite -shave `"$TitleCardborderwidthsecond`"  -bordercolor `"$TitleCardbordercolor`" -border `"$TitleCardborderwidth`" `"$EpisodeImage`""
@@ -17134,7 +17317,7 @@ Elseif ($OtherMediaServerUrl -and $OtherMediaServerApiKey -and $UseOtherMediaSer
                                     }
                                     Else {
                                         if ($entry.extraFolder) {
-                                            $SeasonImageoriginal = "$AssetPath\$($entry.extraFolder)\$($entry.RootFoldername)_$global:FileNaming.jpg"
+                                            $EpisodeImageoriginal = "$AssetPath\$($entry.extraFolder)\$($entry.RootFoldername)_$global:FileNaming.jpg"
                                         }
                                         Else {
                                             $EpisodeImageoriginal = "$AssetPath\$($entry.RootFoldername)_$global:FileNaming.jpg"
@@ -17146,6 +17329,7 @@ Elseif ($OtherMediaServerUrl -and $OtherMediaServerApiKey -and $UseOtherMediaSer
 
                                     if ($Platform -eq 'Docker' -or $Platform -eq 'Linux') {
                                         $hashtestpath = ($TestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
+                                        $EpisodeImageoriginal = ($EpisodeImageoriginal).Replace('\', '/').Replace('./', '/')
                                         $manualtestpath = ($ManualTestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
                                     }
                                     else {
@@ -17342,6 +17526,14 @@ Elseif ($OtherMediaServerUrl -and $OtherMediaServerApiKey -and $UseOtherMediaSer
                                                         $CommentlogEntry | Out-File $global:ScriptRoot\Logs\ImageMagickCommands.log -Append
                                                         InvokeMagickCommand -Command $magick -Arguments $CommentArguments
                                                         if (!$global:ImageMagickError -eq 'True') {
+                                                            if ($UseTCResolutionOverlays -eq 'true'){
+                                                                Write-Entry -Subtext "Queried Overlay Resolution: $global:EPResolution" -Path $global:ScriptRoot\Logs\Scriptlog.log -Color Yellow -log Info
+                                                                switch ($global:EPResolution) {
+                                                                    '4K' { $TitleCardoverlay = $4kTC }
+                                                                    '1080p' { $TitleCardoverlay = $1080pTC }
+                                                                    Default { $TitleCardoverlay = $TitleCardoverlay }
+                                                                }
+                                                            }
                                                             # Resize Image to 2000x3000 and apply Border and overlay
                                                             if ($AddTitleCardBorder -eq 'true' -and $AddTitleCardOverlay -eq 'true') {
                                                                 $Arguments = "`"$EpisodeImage`" -resize `"$BackgroundSize^`" -gravity center -extent `"$BackgroundSize`" `"$TitleCardoverlay`" -gravity south -quality $global:outputQuality -composite -shave `"$TitleCardborderwidthsecond`"  -bordercolor `"$TitleCardbordercolor`" -border `"$TitleCardborderwidth`" `"$EpisodeImage`""
@@ -18411,7 +18603,7 @@ else {
                 }
                 if ($Seasondata) {
                     $SeasonsTemp = $Seasondata.MediaContainer.Directory | Where-Object { $_.Title -ne 'All episodes' }
-                    $SeasonNames = $SeasonsTemp.Title -join ','
+                    $SeasonNames = $SeasonsTemp.Title -join ';'
                     $SeasonNumbers = $SeasonsTemp.index -join ','
                     $SeasonRatingkeys = $SeasonsTemp.ratingKey -join ','
                     $SeasonPosterUrl = ($SeasonsTemp | Where-Object { $_.type -eq "season" }).thumb -join ','
@@ -18727,6 +18919,7 @@ else {
 
                     if ($Platform -eq 'Docker' -or $Platform -eq 'Linux' -or $Platform -eq 'macOS') {
                         $hashtestpath = ($TestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
+                        $PosterImageoriginal = ($PosterImageoriginal).Replace('\', '/').Replace('./', '/')
                         $manualtestpath = ($ManualTestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
                     }
                     else {
@@ -19188,6 +19381,7 @@ else {
 
                         if ($Platform -eq 'Docker' -or $Platform -eq 'Linux' -or $Platform -eq 'macOS') {
                             $hashtestpath = ($TestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
+                            $backgroundImageoriginal = ($backgroundImageoriginal).Replace('\', '/').Replace('./', '/')
                             $manualtestpath = ($ManualTestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
                         }
                         else {
@@ -19389,6 +19583,13 @@ else {
                                     $CommentlogEntry | Out-File $global:ScriptRoot\Logs\ImageMagickCommands.log -Append
                                     InvokeMagickCommand -Command $magick -Arguments $CommentArguments
                                     if (!$global:ImageMagickError -eq 'true') {
+                                        if ($UseBackgroundResolutionOverlays -eq 'true'){
+                                            switch ($entry.Resolution) {
+                                                '4K' { $backgroundoverlay = $4kBackground }
+                                                '1080p' { $backgroundoverlay = $1080pBackground }
+                                                Default { $backgroundoverlay = $backgroundoverlay }
+                                            }
+                                        }
                                         # Calculate the height to maintain the aspect ratio with a width of 1000 pixels
                                         if ($AddBackgroundBorder -eq 'true' -and $AddBackgroundOverlay -eq 'true') {
                                             $Arguments = "`"$backgroundImage`" -resize `"$BackgroundSize^`" -gravity center -extent `"$BackgroundSize`" `"$backgroundoverlay`" -gravity south -quality $global:outputQuality -composite -shave `"$Backgroundborderwidthsecond`"  -bordercolor `"$Backgroundbordercolor`" -border `"$Backgroundborderwidth`" `"$backgroundImage`""
@@ -19704,6 +19905,7 @@ else {
 
                 if ($Platform -eq 'Docker' -or $Platform -eq 'Linux' -or $Platform -eq 'macOS') {
                     $hashtestpath = ($TestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
+                    $PosterImageoriginal = ($PosterImageoriginal).Replace('\', '/').Replace('./', '/')
                     $manualtestpath = ($ManualTestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
                 }
                 else {
@@ -20137,6 +20339,7 @@ else {
 
                     if ($Platform -eq 'Docker' -or $Platform -eq 'Linux' -or $Platform -eq 'macOS') {
                         $hashtestpath = ($TestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
+                        $backgroundImageoriginal = ($backgroundImageoriginal).Replace('\', '/').Replace('./', '/')
                         $manualtestpath = ($ManualTestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
                     }
                     else {
@@ -20347,6 +20550,13 @@ else {
                                 $CommentlogEntry | Out-File $global:ScriptRoot\Logs\ImageMagickCommands.log -Append
                                 InvokeMagickCommand -Command $magick -Arguments $CommentArguments
                                 if (!$global:ImageMagickError -eq 'true') {
+                                    if ($UseBackgroundResolutionOverlays -eq 'true'){
+                                        switch ($entry.Resolution) {
+                                            '4K' { $backgroundoverlay = $4kBackground }
+                                            '1080p' { $backgroundoverlay = $1080pBackground }
+                                            Default { $backgroundoverlay = $backgroundoverlay }
+                                        }
+                                    }
                                     # Calculate the height to maintain the aspect ratio with a width of 1000 pixels
                                     if ($AddBackgroundBorder -eq 'true' -and $AddBackgroundOverlay -eq 'true') {
                                         $Arguments = "`"$backgroundImage`" -resize `"$BackgroundSize^`" -gravity center -extent `"$BackgroundSize`" `"$Backgroundoverlay`" -gravity south -quality $global:outputQuality -composite -shave `"$Backgroundborderwidthsecond`"  -bordercolor `"$Backgroundbordercolor`" -border `"$Backgroundborderwidth`" `"$backgroundImage`""
@@ -20552,7 +20762,7 @@ else {
                     $global:PosterWithText = $null
                     $global:ImageMagickError = $null
                     $global:TextlessPoster = $null
-                    $global:seasonNames = $entry.SeasonNames -split ','
+                    $global:seasonNames = $entry.SeasonNames -split ';'
                     $global:SeasonRatingKeys = $entry.SeasonRatingKeys -split ','
                     $global:seasonNumbers = $entry.seasonNumbers -split ','
                     $global:PlexSeasonUrls = $entry.PlexSeasonUrls -split ','
@@ -20608,6 +20818,7 @@ else {
 
                         if ($Platform -eq 'Docker' -or $Platform -eq 'Linux' -or $Platform -eq 'macOS') {
                             $hashtestpath = ($TestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
+                            $SeasonImageoriginal = ($SeasonImageoriginal).Replace('\', '/').Replace('./', '/')
                             $manualtestpath = ($ManualTestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
                         }
                         else {
@@ -21225,10 +21436,12 @@ else {
                         $global:IsFallback = $null
                         $global:FallbackText = $null
                         $global:TextlessPoster = $null
+                        $global:EPResolutions = $null
 
                         if (($episode.tmdbid -eq $entry.tmdbid -or $episode.tvdbid -eq $entry.tvdbid) -and $episode.'Show Name' -eq $entry.title -and $episode.'Library Name' -eq $entry.'Library Name') {
                             $global:show_name = $episode."Show Name"
                             $global:season_number = $episode."Season Number"
+                            $global:EPResolutions = $episode."Resolutions".Split(",")
                             $global:episode_numbers = $episode."Episodes".Split(",")
                             $global:episode_ratingkeys = $episode."ratingKeys".Split(",")
                             $global:titles = $episode."Title".Split(";")
@@ -21258,6 +21471,7 @@ else {
                                     $global:PlexTitleCardUrl = $entry.PlexBackgroundUrl
                                     $global:episode_ratingkey = $($global:episode_ratingkeys[$i].Trim())
                                     $global:EPTitle = $($global:titles[$i].Trim())
+                                    $global:EPResolution = $($global:EPResolutions[$i].Trim())
                                     $global:episodenumber = $($global:episode_numbers[$i].Trim())
                                     $global:FileNaming = "S" + $global:season_number.PadLeft(2, '0') + "E" + $global:episodenumber.PadLeft(2, '0')
                                     $bullet = [char]0x2022
@@ -21271,7 +21485,7 @@ else {
                                     }
                                     Else {
                                         if ($entry.extraFolder) {
-                                            $SeasonImageoriginal = "$AssetPath\$($entry.extraFolder)\$($entry.RootFoldername)_$global:FileNaming.jpg"
+                                            $EpisodeImageoriginal = "$AssetPath\$($entry.extraFolder)\$($entry.RootFoldername)_$global:FileNaming.jpg"
                                         }
                                         Else {
                                             $EpisodeImageoriginal = "$AssetPath\$($entry.RootFoldername)_$global:FileNaming.jpg"
@@ -21283,6 +21497,7 @@ else {
 
                                     if ($Platform -eq 'Docker' -or $Platform -eq 'Linux' -or $Platform -eq 'macOS') {
                                         $hashtestpath = ($TestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
+                                        $EpisodeImageoriginal = ($EpisodeImageoriginal).Replace('\', '/').Replace('./', '/')
                                         $manualtestpath = ($ManualTestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
                                     }
                                     else {
@@ -21503,6 +21718,13 @@ else {
                                                             $CommentlogEntry | Out-File $global:ScriptRoot\Logs\ImageMagickCommands.log -Append
                                                             InvokeMagickCommand -Command $magick -Arguments $CommentArguments
                                                             if (!$global:ImageMagickError -eq 'true') {
+                                                                if ($UseTCResolutionOverlays -eq 'true'){
+                                                                    switch ($global:EPResolution) {
+                                                                        '4K' { $TitleCardoverlay = $4kTC }
+                                                                        '1080p' { $TitleCardoverlay = $1080pTC }
+                                                                        Default { $TitleCardoverlay = $TitleCardoverlay }
+                                                                    }
+                                                                }
                                                                 # Resize Image to 2000x3000 and apply Border and overlay
                                                                 if ($AddTitleCardBorder -eq 'true' -and $AddTitleCardOverlay -eq 'true') {
                                                                     $Arguments = "`"$EpisodeImage`" -resize `"$BackgroundSize^`" -gravity center -extent `"$BackgroundSize`" `"$TitleCardoverlay`" -gravity south -quality $global:outputQuality -composite -shave `"$TitleCardborderwidthsecond`"  -bordercolor `"$TitleCardbordercolor`" -border `"$TitleCardborderwidth`" `"$EpisodeImage`""
@@ -21812,7 +22034,7 @@ else {
                                     }
                                     Else {
                                         if ($entry.extraFolder) {
-                                            $SeasonImageoriginal = "$AssetPath\$($entry.extraFolder)\$($entry.RootFoldername)_$global:FileNaming.jpg"
+                                            $EpisodeImageoriginal = "$AssetPath\$($entry.extraFolder)\$($entry.RootFoldername)_$global:FileNaming.jpg"
                                         }
                                         Else {
                                             $EpisodeImageoriginal = "$AssetPath\$($entry.RootFoldername)_$global:FileNaming.jpg"
@@ -21824,6 +22046,7 @@ else {
 
                                     if ($Platform -eq 'Docker' -or $Platform -eq 'Linux' -or $Platform -eq 'macOS') {
                                         $hashtestpath = ($TestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
+                                        $EpisodeImageoriginal = ($EpisodeImageoriginal).Replace('\', '/').Replace('./', '/')
                                         $manualtestpath = ($ManualTestPath + "/" + $Testfile).Replace('\', '/').Replace('./', '/')
                                     }
                                     else {
@@ -22057,6 +22280,13 @@ else {
                                                         $CommentlogEntry | Out-File $global:ScriptRoot\Logs\ImageMagickCommands.log -Append
                                                         InvokeMagickCommand -Command $magick -Arguments $CommentArguments
                                                         if (!$global:ImageMagickError -eq 'true') {
+                                                            if ($UseTCResolutionOverlays -eq 'true'){
+                                                                switch ($global:EPResolution) {
+                                                                    '4K' { $TitleCardoverlay = $4kTC }
+                                                                    '1080p' { $TitleCardoverlay = $1080pTC }
+                                                                    Default { $TitleCardoverlay = $TitleCardoverlay }
+                                                                }
+                                                            }
                                                             # Resize Image to 2000x3000 and apply Border and overlay
                                                             if ($AddTitleCardBorder -eq 'true' -and $AddTitleCardOverlay -eq 'true') {
                                                                 $Arguments = "`"$EpisodeImage`" -resize `"$BackgroundSize^`" -gravity center -extent `"$BackgroundSize`" `"$TitleCardoverlay`" -gravity south -quality $global:outputQuality -composite -shave `"$TitleCardborderwidthsecond`"  -bordercolor `"$TitleCardbordercolor`" -border `"$TitleCardborderwidth`" `"$EpisodeImage`""

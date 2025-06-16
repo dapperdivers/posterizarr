@@ -33,7 +33,7 @@
 [![ARM](https://img.shields.io/static/v1?style=for-the-badge&logo=arm&logoColor=FFFFFF&message=ARM&color=815151&label=)](walkthrough.md)
 
 ## Introduction
-This PowerShell  automates the process of generating images for your Plex/Jellyfin/Emby media library. Leveraging information from your Plex/Jellyfin/Emby library, such as movie or show titles, season and episode data, it fetches relevant artwork from Fanart.tv, TMDB, TVDB, Plex and IMDB. The  is able to focus on artwork with specific languages to grab. By default, textless artwork `xx` is retrieved and will fall back to `en` if textless is not found. This is a setting a user can decide on, either to focus on textless or on text posters. It also offers both automatic and manual modes for generating posters. The manual mode can accommodate custom creations that cannot be bulk retrieved.
+This PowerShell script automates generating images for your Plex, Jellyfin, or Emby library by using media info like titles, seasons, and episodes. It fetches artwork from Fanart.tv, TMDB, TVDB, Plex, and IMDb, focusing on specific languages - **defaulting to textless** images and falling back to English if unavailable. Users can choose between textless or text posters. The script supports both automatic bulk downloads and manual mode for custom artwork that can’t be retrieved automatically.
 
 > [!NOTE]
 Posterizarr is cross-platform ready, meaning it can run on Linux, [Docker (Alpine Base Image)](#docker), [unRAID](#unraid) and on Windows operating systems.
@@ -43,72 +43,45 @@ Posterizarr is cross-platform ready, meaning it can run on Linux, [Docker (Alpin
 >- Movie/Show Backgrounds
 >- Season Posters
 >- TitleCards
+>- Collections are **NOT** supported
 
-## 📚 Table of Contents
+## 🧰 What You Need
 
-- [🚀 Walkthrough](#walkthrough---how-to)
-- [⚙️ Configuration](#configuration)
-- [🧪 Usage](#usage)
-- [📌 Main Capabilities of Posterizarr](#main-capabilities-of-posterizarr)
-  - [🤖 Automatic Mode](#automatic-mode)
-  - [🖼️ Asset Tips](#assets-tip)
-  - [✍️ Manual Assets Naming](#manual-assets-naming)
-- [🧩  Modes](#scipt-modes)
-  - [🐳 Tautulli Mode Docker](#tautulli-mode-docker)
-  - [🪟 Tautulli Mode Windows](#tautulli-mode-windows)
-  - [🧪 Testing Mode](#testing-mode)
-  - [🛠️ Manual Mode](#manual-mode)
-  - [💾 Backup Mode](#backup-mode)
-  - [🖼️ Poster reset Mode](#poster-reset-mode)
-  - [🔄 Sync Modes](#sync-modes)
-- [🧰 Platforms & Tools](#platforms--tools)
-  - [🐳 Docker](#docker)
-  - [🧲 unRAID](#unraid)
-  - [📺 Jellyfin](#jellyfin)
-  - [🔔 Webhook](#webhook)
-  - [🖼️ Example Pictures](#example-pictures)
-  - [🧪 Images from Testing Mode](#images-from-testing-mode)
-  - [📑 Brief Overview of Key Settings](#brief-overview-of-key-settings)
-  - [📊 How to create the Posterizarr.xlsm](#how-to-create-the-posterizarrxlsm)
-  - [🧭 How to use the Posterizarr.xlsm](#how-to-use-the-posterizarrxlsm)
-- [🔍 Search Order](#search-order)
-- [📬 PR Rules](#pr-rules)
-- [🎉 Enjoy](#enjoy)
+> [!IMPORTANT]
+>**Requirements:**
+>
+>Before you begin, make sure you have:
+
+>- **A media server (Plex, Jellyfin, or Emby)**
+>- **TMDB API Read Access Token**
+>   - [Obtain TMDB API Token](https://www.themoviedb.org/settings/api) -> **NOTE** the **TMDB API Read Access Token** is the really, really long one
+>- **Fanart Personal API Key**
+>   - [Obtain Fanart API Key](https://fanart.tv/get-an-api-key)
+>- **TVDB API Key**
+>   - [Obtain TVDB API Key](https://thetvdb.com/api-information/signup) -> **Do not** use `"Legacy API Key"`, it only works with a Project Api Key.
+>- **ImageMagick (already integrated in container)**
+>   - **Version 7.x is required** - The script handles downloading and using a portable version of ImageMagick for all platforms. **(You may need to run the Script as Admin on first run)**. If you prefer to reference your own installation or prefer to download and install it yourself, goto: [Download ImageMagick](https://imagemagick.org/script/download.php)
+>- **Powershell Version (already integrated in container)**
+>   - 5.x or higher.
+>- **FanartTv Powershell Module (already integrated in container)**
+>   - This module is required, goto: [Install Module](https://github.com/Celerium/FanartTV-PowerShellWrapper)
 
 
 ## Walkthrough - How-To
 > [!TIP]
 > Here is an installation [walkthrough](walkthrough.md)
 
+## Tips
 > [!IMPORTANT]
 > Do not enable more then one media server.
->
-> If you want to install it on ARM please follow this carefully [ARM prerequisites](walkthrough.md#arm-prerequisites)
-
 
 > [!WARNING]
 >- The `temp` Folder gets cleared on every Script run, so do not put files into it.
 >- **[Apprise](https://github.com/caronc/apprise/wiki)** integration only works in docker container, please use discord on other platforms **(discord also works on docker)**.
->- **Please start the script as Admin on first run, otherwise the script is not able to install the prerequisites.**
+>- Windows Users: **Please start the script as Admin on first run, otherwise the script is not able to install the prerequisites.**
 
 > [!NOTE]
->Upon initial execution, the script may take some time to run as it compiles necessary data. Subsequent runs will look at whether a poster in the AssetPath is missing and only create missing posters, bypassing existing assets in the directory. If you are unhappy with the downloaded artwork, delete it in the AssetPath directory, rerun and the script will populate the missing artwork.
-
-> [!IMPORTANT]
->**Requirements:**
->
->Before utilizing the script, ensure the following prerequisites are installed and configured:
-
->- **TMDB API Read Access Token:** [Obtain TMDB API Token](https://www.themoviedb.org/settings/api)
-    - **NOTE** the **TMDB API Read Access Token** is the really, really long one
->- **Fanart Personal API Key:** [Obtain Fanart API Key](https://fanart.tv/get-an-api-key)
->- **TVDB API Key:** [Obtain TVDB API Key](https://thetvdb.com/api-information/signup)
-    - **Do not** use `"Legacy API Key"`, it only works with a Project Api Key.
->- **ImageMagick:**
-    - **Version 7.x is required** - The script handles downloading and using a portable version of ImageMagick for all platforms. **(You may need to run the Script as Admin on first run)**. If you prefer to reference your own installation or prefer to download and install it yourself (already integrated in container), goto: [Download ImageMagick](https://imagemagick.org/script/download.php)
->- **Powershell Version:** 5.x or higher (already integrated in container).
->- **FanartTv Powershell Module:** This module is required (already integrated in container), goto: [Install Module](https://github.com/Celerium/FanartTV-PowerShellWrapper)
-
+>At first run, the script takes time compiling data. Later runs only create posters missing from the AssetPath, skipping existing ones. To replace unwanted artwork, delete it from AssetPath and rerun the script to restore missing images.
 # Configuration
 
 1. Open `config.example.json` located in the script directory.
@@ -203,12 +176,12 @@ Posterizarr is cross-platform ready, meaning it can run on Linux, [Docker (Alpin
       - **Warning:** This may result in multiple concurrent runs sharing the same temporary directory, potentially causing image artifacts or unexpected behavior during processing.
     - `AutoUpdatePosterizarr`: If set to `true`, Posterizarr will update itself to latest version. (Only for non docker systems).
     - `show_skipped`: If set to `true`, verbose logging of already created assets will be displayed; otherwise, they will be silently skipped - On large libraries, this may appear as if the script is hanging.
-    - `magickinstalllocation`: Path to ImageMagick installation location where `magick.exe` is located (Otherwise leave value as `"./magick"`)
-      - The container handles this part on his own, you can leave it as it is in config.
+    - `magickinstalllocation`: The path to the ImageMagick installation where `magick.exe` is located. (If you prefer using a portable version, leave the value as `"./magick"`.)
+      - The container manages this automatically, so you can leave the default value in the configuration.
     - `maxLogs`: Number of Log folders you want to keep in `RotatedLogs` Folder (Log History).
     - `logLevel`: Sets the verbosity of logging. 1 logs Warning/Error messages. Default is 2 which logs Info/Warning/Error messages. 3 captures Info/Warning/Error/Debug messages and is the most verbose.
     - `font`: Font file name.
-    - `RTLfont`: RTL Font file name. (Right To Left - Currently only works under Windows, there is a bug on container)
+    - `RTLfont`: RTL Font file name.
     - `backgroundfont`: Background font file name.
     - `overlayfile`: Overlay file name.
     - `seasonoverlayfile`: Season overlay file name.
@@ -216,8 +189,16 @@ Posterizarr is cross-platform ready, meaning it can run on Linux, [Docker (Alpin
     - `titlecardoverlayfile` : Title Card overlay file name.
     - `poster4k`: 4K Poster overlay file name. (overlay has to match the Poster dimensions 2000x3000)
     - `Poster1080p` : 1080p Poster overlay file name. (overlay has to match the Poster dimensions 2000x3000)
-    - `UsePosterResolutionOverlays`: Set to `true` to apply specific overlay with resolution for 4k/1080p posters [Example Pic](https://github.com/fscorrupt/Posterizarr/blob/main/images/poster-4k.png).
+    - `Background4k`: 4K Background overlay file name. (overlay has to match the Background dimensions 3840x2160)
+    - `Background1080p` : 1080p Background overlay file name. (overlay has to match the Background dimensions 3840x2160)
+    - `TC4k`: 4K TitleCard overlay file name. (overlay has to match the Poster dimensions 3840x2160)
+    - `TC1080p` : 1080p TitleCard overlay file name. (overlay has to match the Poster dimensions 3840x2160)
+    - `UsePosterResolutionOverlays`: Set to `true` to apply specific overlay with resolution for 4k/1080p posters [4K Example](https://github.com/fscorrupt/Posterizarr/blob/main/images/poster-4k.png)/[1080p Example](https://github.com/fscorrupt/Posterizarr/blob/main/images/poster-1080p.png).
       - if you only want 4k just add your default overlay file also for `Poster1080p`.
+    - `UseBackgroundResolutionOverlays`: Set to `true` to apply specific overlay with resolution for 4k/1080p posters [4K Example](https://github.com/fscorrupt/Posterizarr/blob/main/images/background-4k.png)/[1080p Example](https://github.com/fscorrupt/Posterizarr/blob/main/images/background-1080p.png).
+      - if you only want 4k just add your default overlay file also for `Background1080p`.
+    - `UseTCResolutionOverlays`: Set to `true` to apply specific overlay with resolution for 4k/1080p posters [4K Example](https://github.com/fscorrupt/Posterizarr/blob/main/images/background-4k.png)/[1080p Example](https://github.com/fscorrupt/Posterizarr/blob/main/images/background-1080p.png).
+      - if you only want 4k - add your default (without an resolution) overlay file for `TC1080p`.
     - `LibraryFolders`: Set to `false` for asset structure in one flat folder or `true` to split into library media folders like [Kometa](https://kometa.wiki/en/latest/kometa/guides/assets/#image-asset-directory-guide) needs it.
     - `Posters`: Set to `true` to create movie/show posters.
     - `NewLineOnSpecificSymbols`: Set to `true` to enable automatic insertion of a newline character at each occurrence of specific symbols in `NewLineSymbols` within the title text.
@@ -242,6 +223,8 @@ Posterizarr is cross-platform ready, meaning it can run on Linux, [Docker (Alpin
         ```
     - `AutoUpdateIM` : Set to `true` to AutoUpdate Imagemagick Portable Version (Does not work with Docker/Unraid).
       - Doing this could break things, cause you then uses IM Versions that are not tested with Posterizarr.
+    - `DisableHashValidation` : Set to `true` to skip hash validation (Default value is: false).
+      - *Note: This may produce bloat, as every item will be re-uploaded to the media servers.*
     </details>
     <details close>
     <summary>OverlayPart [click to unfold]</summary>
@@ -386,7 +369,6 @@ Posterizarr is cross-platform ready, meaning it can run on Linux, [Docker (Alpin
     - `lineSpacing`: Adjust the height between lines of text (Default is `0`)
     - `TextGravity`: Specifies the text alignment within the textbox (Default is `south`)
     </details>
-    <br>
 
 3. Rename the config file to `config.json`.
 4. Place the `overlay.png`, or whatever file you defined earlier in `overlayfile`, and `Rocky.ttf` font, or whatever font you defined earlier in `font` files in the same directory as Posterizarr.ps1 which is `$ScriptRoot`.
@@ -397,6 +379,7 @@ Posterizarr is cross-platform ready, meaning it can run on Linux, [Docker (Alpin
 - **Manual Mode**: Run the script with the `-Manual` switch to create custom posters manually.
 - **Backup Mode**: Run the script with the `-Backup` switch to download every artwork from plex (only those what are set to `true` in config)
 - **Poster reset Mode**: Run the script with the `-PosterReset -LibraryToReset "Test Lib"` switch to reset every artwork from a specifc plex lib.
+- **Sync Modes**: Run the script with the `-SyncJelly or -SyncEmby` switch to sync every artwork you have in Plex to Jelly/Emby.
 
 > [!NOTE]
 >- Ensure PowerShell execution policy allows script execution.
@@ -430,7 +413,7 @@ Posterizarr is cross-platform ready, meaning it can run on Linux, [Docker (Alpin
 | **RTL (Right-to-Left) Font Support**     | - Supports **right-to-left (RTL) fonts** for media titles, making it more accessible for non-Latin-based languages such as Arabic or Hebrew.                                                                                         |
 | **New Line on Specific Symbols**         | - Automatically adds a **new line on specific symbols** (e.g., hyphen or colon) within text to enhance visual aesthetics on overlays.                                                                                                |
 | **Fallback Options for Title Cards**     | - Uses **background images as title cards** if title-specific artwork is unavailable.                                                                                         |
-
+|**Overlay Reset**| - Reset all posters in a library of your choice to the Plex default.|
 
 ### Automatic Mode
 
