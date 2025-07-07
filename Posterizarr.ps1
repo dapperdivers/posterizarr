@@ -15,7 +15,7 @@ param (
 )
 Set-PSReadLineOption -HistorySaveStyle SaveNothing
 
-$CurrentScriptVersion = "1.9.63"
+$CurrentScriptVersion = "1.9.67"
 $global:HeaderWritten = $false
 $ProgressPreference = 'SilentlyContinue'
 $env:PSMODULE_ANALYSIS_CACHE_PATH = $null
@@ -1537,7 +1537,7 @@ function GetTMDBSeasonPoster {
     }
     if ($global:SeasonPreferTextless -eq $true) {
         try {
-            $response = (Invoke-WebRequest -Uri "https://api.themoviedb.org/3/tv/$($global:tmdbid)/season/$global:SeasonNumber/images?append_to_response=images&language=xx&include_image_language=$($global:PreferredLanguageOrderTMDB -join ',')" -Method GET -Headers $global:headers -ErrorAction SilentlyContinue).content | ConvertFrom-Json -ErrorAction SilentlyContinue
+            $response = (Invoke-WebRequest -Uri "https://api.themoviedb.org/3/tv/$($global:tmdbid)/season/$global:SeasonNumber/images?append_to_response=images&language=xx&include_image_language=$($global:PreferredSeasonLanguageOrder -join ',')" -Method GET -Headers $global:headers -ErrorAction SilentlyContinue).content | ConvertFrom-Json -ErrorAction SilentlyContinue
         }
         catch {
             Write-Entry -Subtext "Could not query TMDB url, error message: $($_.Exception.Message)" -Path $global:ScriptRoot\Logs\Scriptlog.log -Color Red -log Error
@@ -2606,10 +2606,10 @@ function GetTVDBMoviePoster {
             if ($response) {
                 if ($response.data.artworks) {
                     if ($global:WidthHeightFilter -eq 'true') {
-                        $global:posterurltmp = ($response.data.artworks | Where-Object { $null -eq $_.language -and $_.type -eq '14' -and $_.width -ge $global:PosterMinWidth -and $_.height -ge $global:PosterMinHeight } | Sort-Object Score)
+                        $global:posterurltmp = ($response.data.artworks | Where-Object { $null -eq $_.language -and $_.type -eq '14' -and $_.width -ge $global:PosterMinWidth -and $_.height -ge $global:PosterMinHeight } | Sort-Object Score -Descending)
                     }
                     Else {
-                        $global:posterurltmp = ($response.data.artworks | Where-Object { $null -eq $_.language -and $_.type -eq '14' } | Sort-Object Score)
+                        $global:posterurltmp = ($response.data.artworks | Where-Object { $null -eq $_.language -and $_.type -eq '14' } | Sort-Object Score -Descending)
                     }
                     $global:TVDBAssetChangeUrl = "https://thetvdb.com/movies/$($response.data.slug)#artwork"
                     if ($global:posterurltmp) {
@@ -2627,18 +2627,18 @@ function GetTVDBMoviePoster {
                             foreach ($lang in $global:PreferredLanguageOrderTVDB) {
                                 if ($global:WidthHeightFilter -eq 'true') {
                                     if ($lang -eq 'null') {
-                                        $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "" -and $_.type -eq '14' -and $_.width -ge $global:PosterMinWidth -and $_.height -ge $global:PosterMinHeight } | Sort-Object Score)
+                                        $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "" -and $_.type -eq '14' -and $_.width -ge $global:PosterMinWidth -and $_.height -ge $global:PosterMinHeight } | Sort-Object Score -Descending)
                                     }
                                     Else {
-                                        $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "$lang*" -and $_.type -eq '14' -and $_.width -ge $global:PosterMinWidth -and $_.height -ge $global:PosterMinHeight } | Sort-Object Score)
+                                        $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "$lang*" -and $_.type -eq '14' -and $_.width -ge $global:PosterMinWidth -and $_.height -ge $global:PosterMinHeight } | Sort-Object Score -Descending)
                                     }
                                 }
                                 Else {
                                     if ($lang -eq 'null') {
-                                        $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "" -and $_.type -eq '14' } | Sort-Object Score)
+                                        $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "" -and $_.type -eq '14' } | Sort-Object Score -Descending)
                                     }
                                     Else {
-                                        $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "$lang*" -and $_.type -eq '14' } | Sort-Object Score)
+                                        $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "$lang*" -and $_.type -eq '14' } | Sort-Object Score -Descending)
                                     }
                                 }
                                 if ($LangArtwork) {
@@ -2693,18 +2693,18 @@ function GetTVDBMoviePoster {
                     foreach ($lang in $global:PreferredLanguageOrderTVDB) {
                         if ($global:WidthHeightFilter -eq 'true') {
                             if ($lang -eq 'null') {
-                                $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "" -and $_.type -eq '14' -and $_.width -ge $global:PosterMinWidth -and $_.height -ge $global:PosterMinHeight } | Sort-Object Score)
+                                $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "" -and $_.type -eq '14' -and $_.width -ge $global:PosterMinWidth -and $_.height -ge $global:PosterMinHeight } | Sort-Object Score -Descending)
                             }
                             Else {
-                                $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "$lang*" -and $_.type -eq '14' -and $_.width -ge $global:PosterMinWidth -and $_.height -ge $global:PosterMinHeight } | Sort-Object Score)
+                                $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "$lang*" -and $_.type -eq '14' -and $_.width -ge $global:PosterMinWidth -and $_.height -ge $global:PosterMinHeight } | Sort-Object Score -Descending)
                             }
                         }
                         Else {
                             if ($lang -eq 'null') {
-                                $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "" -and $_.type -eq '14' } | Sort-Object Score)
+                                $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "" -and $_.type -eq '14' } | Sort-Object Score -Descending)
                             }
                             Else {
-                                $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "$lang*" -and $_.type -eq '14' } | Sort-Object Score)
+                                $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "$lang*" -and $_.type -eq '14' } | Sort-Object Score -Descending)
                             }
                         }
                         if ($LangArtwork) {
@@ -2764,9 +2764,9 @@ function GetTVDBMovieBackground {
                         $NoLangArtwork = $response.data.artworks | Where-Object { $null -eq $_.language -and $_.type -eq '15' }
                     }
                     if ($NoLangArtwork) {
-                        $global:posterurl = ($NoLangArtwork | Sort-Object Score)[0].image
+                        $global:posterurl = ($NoLangArtwork | Sort-Object Score -Descending)[0].image
                         if ($global:WidthHeightFilter -eq 'true') {
-                            Write-Entry -Subtext "Found a poster sized at - width: $(($NoLangArtwork | Sort-Object Score)[0].width) | height: $(($NoLangArtwork | Sort-Object Score)[0].height)" -Path $global:ScriptRoot\Logs\Scriptlog.log -Color White -log Info
+                            Write-Entry -Subtext "Found a poster sized at - width: $(($NoLangArtwork | Sort-Object Score -Descending)[0].width) | height: $(($NoLangArtwork | Sort-Object Score -Descending)[0].height)" -Path $global:ScriptRoot\Logs\Scriptlog.log -Color White -log Info
                         }
                         Write-Entry -Subtext "Found Textless Background on TVDB" -Path $global:ScriptRoot\Logs\Scriptlog.log -Color Blue -log Info
                         $global:TVDBAssetChangeUrl = "https://thetvdb.com/movies/$($response.data.slug)#artwork"
@@ -2780,18 +2780,18 @@ function GetTVDBMovieBackground {
                             foreach ($lang in $global:PreferredBackgroundLanguageOrderTVDB) {
                                 if ($global:WidthHeightFilter -eq 'true') {
                                     if ($lang -eq 'null') {
-                                        $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "" -and $_.type -eq '15' -and $_.width -ge $global:BgTcMinWidth -and $_.height -ge $global:BgTcMinHeight } | Sort-Object Score)
+                                        $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "" -and $_.type -eq '15' -and $_.width -ge $global:BgTcMinWidth -and $_.height -ge $global:BgTcMinHeight } | Sort-Object Score -Descending)
                                     }
                                     Else {
-                                        $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "$lang*" -and $_.type -eq '15' -and $_.width -ge $global:BgTcMinWidth -and $_.height -ge $global:BgTcMinHeight } | Sort-Object Score)
+                                        $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "$lang*" -and $_.type -eq '15' -and $_.width -ge $global:BgTcMinWidth -and $_.height -ge $global:BgTcMinHeight } | Sort-Object Score -Descending)
                                     }
                                 }
                                 Else {
                                     if ($lang -eq 'null') {
-                                        $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "" -and $_.type -eq '15' } | Sort-Object Score)
+                                        $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "" -and $_.type -eq '15' } | Sort-Object Score -Descending)
                                     }
                                     Else {
-                                        $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "$lang*" -and $_.type -eq '15' } | Sort-Object Score)
+                                        $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "$lang*" -and $_.type -eq '15' } | Sort-Object Score -Descending)
                                     }
                                 }
                                 if ($LangArtwork) {
@@ -2850,18 +2850,18 @@ function GetTVDBMovieBackground {
                     foreach ($lang in $global:PreferredBackgroundLanguageOrderTVDB) {
                         if ($global:WidthHeightFilter -eq 'true') {
                             if ($lang -eq 'null') {
-                                $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "" -and $_.type -eq '15' -and $_.width -ge $global:BgTcMinWidth -and $_.height -ge $global:BgTcMinHeight } | Sort-Object Score)
+                                $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "" -and $_.type -eq '15' -and $_.width -ge $global:BgTcMinWidth -and $_.height -ge $global:BgTcMinHeight } | Sort-Object Score -Descending)
                             }
                             Else {
-                                $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "$lang*" -and $_.type -eq '15' -and $_.width -ge $global:BgTcMinWidth -and $_.height -ge $global:BgTcMinHeight } | Sort-Object Score)
+                                $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "$lang*" -and $_.type -eq '15' -and $_.width -ge $global:BgTcMinWidth -and $_.height -ge $global:BgTcMinHeight } | Sort-Object Score -Descending)
                             }
                         }
                         Else {
                             if ($lang -eq 'null') {
-                                $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "" -and $_.type -eq '15' } | Sort-Object Score)
+                                $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "" -and $_.type -eq '15' } | Sort-Object Score -Descending)
                             }
                             Else {
-                                $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "$lang*" -and $_.type -eq '15' } | Sort-Object Score)
+                                $LangArtwork = ($response.data.artworks | Where-Object { $_.language -like "$lang*" -and $_.type -eq '15' } | Sort-Object Score -Descending)
                             }
                         }
                         if ($LangArtwork) {
@@ -6810,6 +6810,15 @@ if ($UseJellyfin -eq 'true') {
 $EmbyUrl = $config.EmbyPart.EmbyUrl
 $UseEmby = $config.EmbyPart.UseEmby.tolower()
 if ($UseEmby -eq 'true') {
+
+    # Check and normalize Emby URL
+    # Only modify if IP or localhost and missing /emby
+    if ($EmbyUrl -match '^http[s]?://(?:localhost|\d{1,3}(?:\.\d{1,3}){3})(:\d+)?(?!/emby)(/?$)') {
+        # Append /emby if it's not already there
+        $EmbyUrl = $EmbyUrl.TrimEnd('/') + '/emby'
+        Write-Entry -Message "Your Emby URL is missing '/emby' at the end. It has been auto-corrected, but please update your config.json to avoid this message." -Path "$global:ScriptRoot\Logs\Scriptlog.log" -Color Yellow -log Warning
+    }
+
     $LibstoExclude = $config.EmbyPart.LibstoExclude
     $OtherMediaServerUrl = $EmbyUrl
     $UseOtherMediaServer = $UseEmby
