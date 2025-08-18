@@ -518,7 +518,7 @@ To use it we need to configure a script in Tautulli, please follow these instruc
 1. Click on `Add a new notification agent` and select `Script`
 1. Specify the script folder where you placed the script and select the script file.
     - You can specify a `Description` at the bottom like i did.
-    <details close>
+    <details open>
     <summary>🖼️Example [click to unfold]</summary>
     <br>
     <p>
@@ -528,7 +528,7 @@ To use it we need to configure a script in Tautulli, please follow these instruc
     </p>
     </details>
 1. Go to `Triggers`, scroll down and select `Recently Added`.
-    <details close>
+    <details open>
     <summary>🖼️Example [click to unfold]</summary>
     <br>
     <p>
@@ -541,7 +541,7 @@ To use it we need to configure a script in Tautulli, please follow these instruc
     - In my case i specified the **Media Type**: `episode, movie, show and season`
     - I also excluded the **Youtube** Lib cause the videos i have there - **do not** have an `tmdb,tvdb or fanart ID`.
       - This is an recommended setting, either exclude such libs or include only those libs where Posterizarr should create art for.
-    <details close>
+    <details open>
     <summary>🖼️Example [click to unfold]</summary>
     <br>
     <p>
@@ -555,7 +555,7 @@ To use it we need to configure a script in Tautulli, please follow these instruc
     ```sh
     <movie>RatingKey "{rating_key}" mediatype "{media_type}"</movie><show>RatingKey "{rating_key}" mediatype "{media_type}"</show><season>parentratingkey "{parent_rating_key}" mediatype "{media_type}"</season><episode>RatingKey "{rating_key}" parentratingkey "{parent_rating_key}" grandparentratingkey "{grandparent_rating_key}" mediatype "{media_type}"</episode>
     ```
-    <details close>
+    <details open>
     <summary>🖼️Example [click to unfold]</summary>
     <br>
     <p>
@@ -576,7 +576,7 @@ In this mode we use Tautulli to trigger Posterizarr for an specific item in Plex
 1. Specify the script folder of Posterizarr and select the script file.
     - Set the script timeout to `0`, which is unlimited. (The default is `30`, which would kill the script before it finishes.)
     - You can specify a `Description` at the bottom like i did.
-    <details close>
+    <details open>
     <summary>🖼️Example [click to unfold]</summary>
     <br>
     <p>
@@ -586,7 +586,7 @@ In this mode we use Tautulli to trigger Posterizarr for an specific item in Plex
     </p>
     </details>
 1. Go to `Triggers`, scroll down and select `Recently Added`.
-    <details close>
+    <details open>
     <summary>🖼️Example [click to unfold]</summary>
     <br>
     <p>
@@ -599,7 +599,7 @@ In this mode we use Tautulli to trigger Posterizarr for an specific item in Plex
     - In my case i specified the **Media Type**: `episode, movie, show and season`
     - I also excluded the **Youtube** Lib cause the videos i have there - **do not** have an `tmdb,tvdb or fanart ID`.
       - This is an recommended setting, either exclude such libs or include only those libs where Posterizarr should create art for.
-    <details close>
+    <details open>
     <summary>🖼️Example [click to unfold]</summary>
     <br>
     <p>
@@ -613,7 +613,7 @@ In this mode we use Tautulli to trigger Posterizarr for an specific item in Plex
     ```sh
     <movie>RatingKey "{rating_key}" mediatype "{media_type}"</movie><show>RatingKey "{rating_key}" mediatype "{media_type}"</show><season>parentratingkey "{parent_rating_key}" mediatype "{media_type}"</season><episode>RatingKey "{rating_key}" parentratingkey "{parent_rating_key}" grandparentratingkey "{grandparent_rating_key}" mediatype "{media_type}"</episode>
     ```
-    <details close>
+    <details open>
     <summary>🖼️Example [click to unfold]</summary>
     <br>
     <p>
@@ -809,7 +809,7 @@ On [docker](#docker) this way:
 
 
 ### How to create the Posterizarr.xlsm
-<details close>
+<details open>
 <summary>📝Posterizarr Excel Creation using Module1.bas [click to unfold]</summary>
 <br>
 
@@ -841,7 +841,7 @@ Following these steps will allow you to import the `Module1.bas` file containing
 </details>
 
 ### How to use the Posterizarr.xlsm
-<details close>
+<details open>
 <summary>🎥Posterizarr Excel [click to unfold]</summary>
 <br>
 <p>
@@ -860,7 +860,7 @@ In order to view the `16:9` episode posters without getting cropped to `3:2`, yo
     height:9vw;
 }
 ```
-<details close>
+<details open>
 <summary>CSS Client side How-To [click to unfold]</summary>
 <br>
 <p>
@@ -871,7 +871,7 @@ In order to view the `16:9` episode posters without getting cropped to `3:2`, yo
 
 </details>
 
-<details close>
+<details open>
 <summary>CSS Server wide How-To [click to unfold]</summary>
 <br>
 <p>
@@ -884,7 +884,7 @@ In order to view the `16:9` episode posters without getting cropped to `3:2`, yo
 ## Showcase
 
 ### Brief Overview of Key Settings
-<details close>
+<details open>
 <summary>🖼️Layout and Styling Definitions [click to unfold]</summary>
 <br>
 <p>
@@ -896,7 +896,7 @@ In order to view the `16:9` episode posters without getting cropped to `3:2`, yo
 
 ### Images from Testing Mode
 
-<details close>
+<details open>
 <summary>🖼️Posters [click to unfold]</summary>
 <br>
 <p>
@@ -906,7 +906,7 @@ In order to view the `16:9` episode posters without getting cropped to `3:2`, yo
 </p>
 </details>
 
-<details close>
+<details open>
 <summary>🖼️Backgrounds [click to unfold]</summary>
 <br>
 <p>
@@ -916,7 +916,7 @@ In order to view the `16:9` episode posters without getting cropped to `3:2`, yo
 </p>
 </details>
 
-<details close>
+<details open>
 <summary>🖼️TitleCards [click to unfold]</summary>
 <br>
 <p>
@@ -928,7 +928,7 @@ In order to view the `16:9` episode posters without getting cropped to `3:2`, yo
 
 ### Webhook
 
-<details close>
+<details open>
 <summary>🖼️Discord Webhook [click to unfold]</summary>
 <br>
 <p>
@@ -941,7 +941,7 @@ In order to view the `16:9` episode posters without getting cropped to `3:2`, yo
 
 ### Example Pictures
 
-<details close>
+<details open>
 <summary>🖼️ImageChoices.csv [click to unfold]</summary>
 <br>
 <p>
@@ -950,7 +950,7 @@ In order to view the `16:9` episode posters without getting cropped to `3:2`, yo
   </a>
 </p>
 </details>
-<details close>
+<details open>
 <summary>🖼️Assets after Posterizarr run [click to unfold]</summary>
 <br>
 <p>
@@ -969,7 +969,7 @@ In order to view the `16:9` episode posters without getting cropped to `3:2`, yo
 > [!TIP]
 > - It was made using this Posterizarr [config](MyPersonalConfig.json).
 
-<details close>
+<details open>
 <summary>🖼️Assets after Kometa run [click to unfold]</summary>
 <br>
 <p>
@@ -990,7 +990,7 @@ In order to view the `16:9` episode posters without getting cropped to `3:2`, yo
 
 ## Search Order
 
-<details close>
+<details open>
 <summary>🔍Movie Poster & Background [click to unfold]</summary>
 <br>
 <p>
@@ -1021,7 +1021,7 @@ In order to view the `16:9` episode posters without getting cropped to `3:2`, yo
 </p>
 </details>
 
-<details close>
+<details open>
 <summary>🔍Show Poster & Background [click to unfold]</summary>
 <br>
 <p>
@@ -1049,7 +1049,7 @@ In order to view the `16:9` episode posters without getting cropped to `3:2`, yo
 </p>
 </details>
 
-<details close>
+<details open>
 <summary>🔍Show Season Poster [click to unfold]</summary>
 <br>
 <p>
@@ -1077,7 +1077,7 @@ In order to view the `16:9` episode posters without getting cropped to `3:2`, yo
 </p>
 </details>
 
-<details close>
+<details open>
 <summary>🔍Show TC with Background Poster [click to unfold]</summary>
 <br>
 <p>
@@ -1097,7 +1097,7 @@ In order to view the `16:9` episode posters without getting cropped to `3:2`, yo
   - PLEX (Not for Textless only `xx`)
 </p>
 </details>
-<details close>
+<details open>
 <summary>🔍Show TC Poster [click to unfold]</summary>
 <br>
 <p>

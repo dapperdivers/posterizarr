@@ -50,6 +50,6 @@ VOLUME ["/config"]
 
 ENTRYPOINT ["/usr/bin/catatonit", "--", "pwsh", "-NoProfile", "/app/Start.ps1"]
 
-LABEL org.opencontainers.image.source="https://github.com/fscorrupt/Posterizarr"
-LABEL org.opencontainers.image.description="Posterizarr - Automated poster generation for Plex/Jellyfin/Emby media libraries"
+LABEL org.opencontainers.image.source="https://github.com/dapperdivers/posterizarr"
+LABEL org.opencontainers.image.description="Forked-Posterizarr - Automated poster generation for Plex/Jellyfin/Emby media libraries"
 LABEL org.opencontainers.image.licenses="GPL-3.0"
